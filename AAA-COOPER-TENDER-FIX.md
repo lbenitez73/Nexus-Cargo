@@ -43,6 +43,42 @@ Central Transport.
 2. In the AAA Cooper portal (aaacooper.com → Workspace → Pickup), look up 71785468
    under account 1167251.
 
+### Confirmed 2026-10-22: SK-10024 went out through WWEX, but WWEX is supposed to be off
+
+The SK-10024 log reads "Dispatched to AAA Cooper via Worldwide Express". So the
+"AAA Cooper" rate on that quote was a **WWEX rate** with a quote ref of the form
+`WWEX:<…>:<…>:AACT`, not a rate from your own AAA Cooper account. Two gaps let
+that happen:
+
+1. **Rating still returns WWEX offers.** Whatever "temporarily off" sets today, at
+   least one rating path ignores it. The broker quote screen, the customer
+   portal's re-rate at booking and the mass rater are all candidates. The portal
+   re-rates at booking and passes `quoteRef` straight into `autoDispatchShipment`.
+2. **Dispatch never checks whether WWEX is enabled.** `dispatchBookedLoad` in
+   `services/dispatch.ts` routes on the quote-ref prefix alone
+   (`providerForRef(ref) === "WWEX"`, then `wwexBook(...)`). Any `WWEX:` ref gets
+   booked with WWEX as long as credentials are still saved, toggle or no toggle.
+
+**Code fix (do this before the AAA Cooper adapter):**
+- A single helper, e.g. `isAggregatorEnabled("WWEX")`, read from settings. One
+  source of truth for "WWEX is off".
+- **Rating:** every path that calls WWEX checks the helper and skips WWEX when it
+  is off. That covers the quote screen, the portal (including the re-rate at
+  booking), the mass rater, and any cached or saved quotes being re-offered.
+- **Dispatch guard:** in `dispatchBookedLoad` and `autoDispatchShipment`, if
+  `provider === "WWEX"` and WWEX is off, **do not call `wwexBook`**. Log
+  "NOT dispatched — Worldwide Express is turned off; re-rate this load", set
+  `dispatchError`, and return `dispatched: false`. Do **not** fall back to
+  `tenderLoad()` on a WWEX-priced rate, because that tenders the carrier at a
+  price that isn't yours.
+- **Tests:** with WWEX off, a `WWEX:…:AACT` ref must never reach `wwexBook`, and
+  rating must return no WWEX offers on any path.
+
+**SK-10024 itself:** it is live with Worldwide Express, under their account, at
+their rate. If it should move under your own AAA Cooper account (C# 1167251),
+**cancel it with WWEX first**, then book directly with AAA Cooper. Two open
+bookings mean two trucks.
+
 ---
 
 ## 2. Credentials to collect from the AAA Cooper portal (Chrome)
