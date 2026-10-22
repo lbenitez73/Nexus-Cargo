@@ -43,12 +43,36 @@ Central Transport.
 2. In the AAA Cooper portal (aaacooper.com → Workspace → Pickup), look up 71785468
    under account 1167251.
 
-### Confirmed 2026-10-22: SK-10024 went out through WWEX, but WWEX is supposed to be off
+### Update 2026-10-22: the log and WWEX disagree
 
-The SK-10024 log reads "Dispatched to AAA Cooper via Worldwide Express". So the
-"AAA Cooper" rate on that quote was a **WWEX rate** with a quote ref of the form
-`WWEX:<…>:<…>:AACT`, not a rate from your own AAA Cooper account. Two gaps let
-that happen:
+The SK-10024 log reads "Dispatched to AAA Cooper via Worldwide Express". A WWEX
+CSR says the load **did not go through WWEX** and went **directly to AAA
+Cooper**. Pickup # 71785468 is in AAA Cooper's number format, which supports
+that.
+
+So the status log is not trustworthy as written. Find out which of these is true:
+- The quote ref started `WWEX:` and the code called `wwexBook()`, but what that
+  call actually hits tenders straight to AAA Cooper. A WWEX CSR would not see that.
+- Some other path (a direct AAA Cooper call already in the code) booked it, and
+  the "via Worldwide Express" text is a stale or wrong log message.
+
+**Check in the code (Mac session):**
+- The `selectedQuoteRef` stored on SK-10024's quote.
+- Which function produced the dispatch log line.
+- What URL and account `wwexBook()` actually posts to.
+- Which account number and bill-to party ended up on SK-10024's BOL.
+
+**Check with AAA Cooper:** is pickup 71785468 active? Which account is it under
+(1167251, or someone else's)? Who is the bill-to?
+
+The WWEX-off guards below are still worth doing as a safety net. Do **not** treat
+"SK-10024 went through WWEX" as established.
+
+### Original reading (now in doubt): SK-10024 went out through WWEX, but WWEX is supposed to be off
+
+If the quote ref is `WWEX:<…>:<…>:AACT`, the "AAA Cooper" rate on that quote was a
+WWEX rate, not a rate from your own AAA Cooper account. Two gaps would let that
+happen:
 
 1. **Rating still returns WWEX offers.** Whatever "temporarily off" sets today, at
    least one rating path ignores it. The broker quote screen, the customer
@@ -74,10 +98,11 @@ that happen:
 - **Tests:** with WWEX off, a `WWEX:…:AACT` ref must never reach `wwexBook`, and
   rating must return no WWEX offers on any path.
 
-**SK-10024 itself:** it is live with Worldwide Express, under their account, at
-their rate. If it should move under your own AAA Cooper account (C# 1167251),
-**cancel it with WWEX first**, then book directly with AAA Cooper. Two open
-bookings mean two trucks.
+**SK-10024 itself:** WWEX says it is not in their system. A cancellation request
+was emailed to WWEX before that call. Tell them to disregard it so they don't
+contact AAA Cooper about it. Pickup 71785468 is presumably live at AAA Cooper.
+Confirm the account and bill-to with AAA Cooper before booking anything else, or
+you risk a second truck.
 
 ---
 
